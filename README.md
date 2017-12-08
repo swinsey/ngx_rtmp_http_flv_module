@@ -1,0 +1,2 @@
+# ngx_rtmp_http_flv_module
+把rtmp流简单的转换成httpflv格式的直播流，可以使用flv.js播放
