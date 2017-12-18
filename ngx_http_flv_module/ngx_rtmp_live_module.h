@@ -15,8 +15,8 @@
 #include "ngx_rtmp_bandwidth.h"
 #include "ngx_rtmp_streams.h"
 
-#define NGX_LIVE_TYPE_RTMP 1;
-#define NGX_LIVE_TYPE_HTTP_FLV 0;
+#define NGX_LIVE_TYPE_RTMP 1
+#define NGX_LIVE_TYPE_HTTP_FLV 0
 
 
 typedef struct ngx_rtmp_live_ctx_s ngx_rtmp_live_ctx_t;

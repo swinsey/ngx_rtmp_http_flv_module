@@ -579,6 +579,7 @@ ngx_rtmp_live_join(ngx_rtmp_session_t *s, u_char *name, unsigned publisher)
     ctx->cs[0].csid = NGX_RTMP_CSID_VIDEO;
     ctx->cs[1].csid = NGX_RTMP_CSID_AUDIO;
 
+
     if (!ctx->publishing && ctx->stream->active) {
         ngx_rtmp_live_start(s);
     }
