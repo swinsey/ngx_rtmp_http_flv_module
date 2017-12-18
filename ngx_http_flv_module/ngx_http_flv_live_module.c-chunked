@@ -11,6 +11,16 @@
 
 //#define WRITE_FLV_FILE
 
+//默认使用chunk模式size
+/*
+[chunk_size][\r\n][chunk_data][\r\n][chunk_size][\r\n][chunk_data][\r\n][chunk_size = 0][\r\n][\r\n]
+
+关于size 
+头部是3134这两个字节，表示的是1和4这两个ascii字符，
+被http协议解释为十六进制数14，也就是十进制的20
+如果是长度是13 则十六进制为d, ascii 为'd'字符
+*/
+
 #ifdef WRITE_FLV_FILE
 static ngx_fd_t         	g_fd = -1;
 static ngx_int_t			g_count = 0;
@@ -500,6 +510,7 @@ static ngx_chain_t* ngx_http_flv_live_prepare_message(ngx_rtmp_session_t *s, ngx
 	
 	u_char *p, *pp;
 	uint32_t 	tag_size, data_size;
+	u_char  chunk_header[ngx_strlen("3110400")+3];
 	
 	tag_size = data_size = 0;
 	cscf = ngx_rtmp_get_module_srv_conf(s, ngx_rtmp_core_module);
@@ -527,16 +538,32 @@ static ngx_chain_t* ngx_http_flv_live_prepare_message(ngx_rtmp_session_t *s, ngx
 	*p++ = 0;
 	*p++ = 0;
 	
-	if(last_chunk->buf->end - last_chunk->buf->last<4){	
+	tag_size = FLV_TAG_LEN+ data_size;
+	//add chunk header	
+	ngx_memzero(chunk_header, sizeof(chunk_header));
+	ngx_sprintf(chunk_header, "%xD"CRLF, tag_size + 4);//4 prev data size 
+	if((uint32_t)(tag_chain->buf->pos - tag_chain->buf->start) < ngx_strlen(chunk_header)){
+		l = ngx_rtmp_alloc_shared_buf(cscf);		
+		l->next = tag_chain;
+		tag_chain = l;
+	}else{
+		tag_chain->buf->pos -= ngx_strlen(chunk_header);
+	}	
+	memcpy(tag_chain->buf->pos, chunk_header, ngx_strlen(chunk_header));
+	
+	if(last_chunk->buf->end - last_chunk->buf->last<6){	
 		last_chunk->next = ngx_rtmp_alloc_shared_buf(cscf);
 		last_chunk = last_chunk->next;
-	}
-	tag_size = FLV_TAG_LEN+ data_size;
+	}	
+	
 	pp = (u_char*)&tag_size;
 	*last_chunk->buf->last++ = pp[3];
 	*last_chunk->buf->last++ = pp[2];
 	*last_chunk->buf->last++ = pp[1];
 	*last_chunk->buf->last++ = pp[0];
+	*last_chunk->buf->last++ = CR;
+	*last_chunk->buf->last++ = LF;
+	
 	ngx_log_error(NGX_LOG_INFO, s->connection->log, 0, 
 		"videotype:%d   ,  timestamp:%d ",h->type,h->timestamp);
     return tag_chain;
@@ -841,8 +868,10 @@ static ngx_int_t ngx_http_flv_live_send_flv_header(ngx_rtmp_session_t *s){
 	//ngx_http_request_t *r; 
 	//ngx_http_flv_live_ctx_t *ctx;
 	ngx_chain_t r_pkt,h_pkt, *ppkt;
-	ngx_buf_t	r_buf, h_buf;
-	
+	ngx_buf_t	r_buf, h_buf;	
+	u_char flv_header_chunked[18];
+	u_char *p;
+		
 	const ngx_str_t http_response_header =ngx_string(
 		"HTTP/1.1 200 OK"
 	   CRLF	   
@@ -858,7 +887,7 @@ static ngx_int_t ngx_http_flv_live_send_flv_header(ngx_rtmp_session_t *s){
 	   CRLF
 	   "Cache-Control: no-cache"
 	   CRLF
-	   "Expires: -1"
+	   "Transfer-Encoding: chunked"
 	   CRLF
 	   CRLF);
 	u_char flv_header[] = "FLV\x1\0\0\0\0\x9\0\0\0\0"; //有待设定
@@ -891,6 +920,15 @@ static ngx_int_t ngx_http_flv_live_send_flv_header(ngx_rtmp_session_t *s){
 		flv_header[4] |= 0x01;
 	}
 
+	p = flv_header_chunked;
+	*p++ = 'd';
+	*p++ = CR;
+	*p++ = LF;
+	memcpy(p, flv_header, 13);
+	p+=13;
+	*p++ = CR;
+	*p++ = LF;
+
 	ngx_memzero(&r_buf, sizeof(r_buf));
 	ngx_memzero(&h_buf, sizeof(h_buf));
 	r_pkt.buf = &r_buf;
@@ -898,8 +936,8 @@ static ngx_int_t ngx_http_flv_live_send_flv_header(ngx_rtmp_session_t *s){
 	r_pkt.buf->end = r_pkt.buf->last = http_response_header.data + http_response_header.len;
 	
 	h_pkt.buf = &h_buf;		
-	h_pkt.buf->start = h_pkt.buf->pos = flv_header;	
-	h_pkt.buf->end  = h_pkt.buf->last= flv_header + 13;
+	h_pkt.buf->start = h_pkt.buf->pos = flv_header_chunked;	
+	h_pkt.buf->end  = h_pkt.buf->last= flv_header_chunked + 18;
 	
 	r_pkt.next = &h_pkt;	
 	h_pkt.next = NULL;	
