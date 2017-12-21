@@ -4,9 +4,12 @@
 基于nginx-1.9.3 rtmp-module
 
 # 使用
+* 进入目录 ./auto_install.sh 安装(出现ssl错误则需要安装openssl的相关库)
 
-解压nginx-rtmp-module-master.zip ，把ngx_http_flv_module中的文件替换编译即可
+* /usr/local/nginx/sbin/nginx -c /usr/local/nginx/conf/nginx.conf 运行nginx
 
+* 在支持flv.js的浏览器中输入： http\://192.168.8.xx:8080/httpflvjs.html 
+* 不支持的浏览器输入：http\://192.168.8.xx:8080/httpflv.html 
 
 # 配置
 * nginx
